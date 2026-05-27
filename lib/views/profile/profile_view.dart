@@ -365,41 +365,52 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Widget _buildSummaryGrid(Map<String, String> totals) {
-    final cards = [
-      _buildSummaryCard(
-        'Total Distance',
-        totals['distance'] ?? '0 km',
-        Icons.alt_route,
-        AppColors.greenAccent,
-      ),
-      _buildSummaryCard(
-        'Total Time',
-        totals['duration'] ?? '0h 0m',
-        Icons.watch_later,
-        AppColors.electricBlue,
-      ),
-      _buildSummaryCard(
-        'Elevation Gain',
-        totals['elevation'] ?? '0 m',
-        Icons.terrain,
-        const Color(0xFF9F7AEA),
-      ),
-      _buildSummaryCard(
-        'Calories Burned',
-        totals['calories'] ?? '0 kcal',
-        Icons.local_fire_department,
-        Colors.deepOrangeAccent,
-      ),
+    final entries = [
+      {
+        'label': 'Total Distance',
+        'value': totals['distance'] ?? '0 km',
+        'icon': Icons.alt_route,
+        'color': AppColors.greenAccent,
+      },
+      {
+        'label': 'Total Time',
+        'value': totals['duration'] ?? '0h 0m',
+        'icon': Icons.watch_later,
+        'color': AppColors.electricBlue,
+      },
+      {
+        'label': 'Elevation Gain',
+        'value': totals['elevation'] ?? '0 m',
+        'icon': Icons.terrain,
+        'color': const Color(0xFF9F7AEA),
+      },
+      {
+        'label': 'Calories Burned',
+        'value': totals['calories'] ?? '0 kcal',
+        'icon': Icons.local_fire_department,
+        'color': Colors.deepOrangeAccent,
+      },
     ];
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.05,
-      children: cards,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - 12) / 2;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: entries.map((e) {
+            return SizedBox(
+              width: itemWidth,
+              child: _buildSummaryCard(
+                e['label'] as String,
+                e['value'] as String,
+                e['icon'] as IconData,
+                e['color'] as Color,
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 

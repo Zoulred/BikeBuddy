@@ -43,7 +43,7 @@ class _HistoryViewState extends State<HistoryView> {
                 const SizedBox(height: 20),
                 if (filteredRides.isEmpty)
                   _buildEmptyState()
-                else
+                else ...[
                   ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -53,6 +53,12 @@ class _HistoryViewState extends State<HistoryView> {
                       return _buildRideCard(context, filteredRides[index]);
                     },
                   ),
+                  const SizedBox(height: 12),
+                  _buildPagination(
+                    filteredRides.length,
+                    viewModel.rides.length,
+                  ),
+                ],
               ],
             ),
           );
@@ -99,6 +105,29 @@ class _HistoryViewState extends State<HistoryView> {
       (sum, ride) => sum + ride.calories,
     );
 
+    final entries = [
+      {
+        'label': 'Total Rides',
+        'value': '${tabRides.length}',
+        'color': AppColors.greenAccent,
+      },
+      {
+        'label': 'Distance',
+        'value': '${totalDistance.toStringAsFixed(1)} km',
+        'color': AppColors.electricBlue,
+      },
+      {
+        'label': 'Duration',
+        'value': _formatDuration(totalDuration),
+        'color': Colors.amber,
+      },
+      {
+        'label': 'Calories',
+        'value': '$totalCalories',
+        'color': Colors.redAccent,
+      },
+    ];
+
     return GlassBox(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -114,30 +143,24 @@ class _HistoryViewState extends State<HistoryView> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildSummaryCard(
-                  'Total Rides',
-                  '${tabRides.length}',
-                  AppColors.greenAccent,
-                ),
-                _buildSummaryCard(
-                  'Distance',
-                  '${totalDistance.toStringAsFixed(1)} km',
-                  AppColors.electricBlue,
-                ),
-                _buildSummaryCard(
-                  'Duration',
-                  _formatDuration(totalDuration),
-                  Colors.amber,
-                ),
-                _buildSummaryCard(
-                  'Calories',
-                  '$totalCalories',
-                  Colors.redAccent,
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: entries.map((e) {
+                    return SizedBox(
+                      width: itemWidth,
+                      child: _buildSummaryCard(
+                        e['label'] as String,
+                        e['value'] as String,
+                        e['color'] as Color,
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
             ),
           ],
         ),
@@ -146,33 +169,33 @@ class _HistoryViewState extends State<HistoryView> {
   }
 
   Widget _buildSummaryCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.navyBlue.withOpacity(0.85),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: AppColors.textBody, fontSize: 12),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.navyBlue.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(color: AppColors.textBody, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -301,14 +324,16 @@ class _HistoryViewState extends State<HistoryView> {
       child: GlassBox(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              _buildRideMapPreview(ride),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 420;
+              if (narrow) {
+                // Stack vertically on narrow screens
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildRideMapPreview(ride),
+                    const SizedBox(height: 12),
                     Text(
                       ride.title,
                       maxLines: 1,
@@ -327,31 +352,182 @@ class _HistoryViewState extends State<HistoryView> {
                       style: TextStyle(color: AppColors.textBody, fontSize: 12),
                     ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Row(
                       children: [
-                        _buildStatChip(
-                          Icons.place,
-                          '${ride.distance.toStringAsFixed(2)} km',
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: _buildStatCompact(
+                            Icons.place,
+                            '${ride.distance.toStringAsFixed(2)}',
+                            'km',
+                          ),
                         ),
-                        _buildStatChip(
-                          Icons.access_time,
-                          ride.duration.toString().split('.').first,
+                        const SizedBox(width: 12),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: _buildStatCompact(
+                            Icons.access_time,
+                            _formatDuration(ride.duration),
+                            '',
+                          ),
                         ),
-                        _buildStatChip(
-                          Icons.speed,
-                          '${_getAverageSpeed(ride)} km/h',
+                        const SizedBox(width: 12),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: _buildStatCompact(
+                            Icons.speed,
+                            _getAverageSpeed(ride),
+                            'km/h',
+                          ),
                         ),
                       ],
                     ),
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+
+              // Default wide layout
+              return Row(
+                children: [
+                  _buildRideMapPreview(ride),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ride.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textBody,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: _buildStatColumnSimple(
+                                Icons.place,
+                                '${ride.distance.toStringAsFixed(2)}',
+                                'km',
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: _buildStatColumnSimple(
+                                Icons.access_time,
+                                _formatDuration(ride.duration),
+                                '',
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: _buildStatColumnSimple(
+                                Icons.speed,
+                                _getAverageSpeed(ride),
+                                'km/h',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // placeholder weather icon
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.navyBlue.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.wb_sunny,
+                          color: Colors.orange,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textBody,
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatColumnSimple(IconData icon, String value, String unit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: AppColors.electricBlue),
+            const SizedBox(width: 8),
+            Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(unit, style: TextStyle(color: AppColors.textBody, fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _buildStatCompact(IconData icon, String value, String unit) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppColors.electricBlue),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (unit.isNotEmpty) const SizedBox(width: 6),
+        if (unit.isNotEmpty)
+          Text(unit, style: TextStyle(color: AppColors.textBody, fontSize: 12)),
+      ],
     );
   }
 
@@ -450,26 +626,6 @@ class _HistoryViewState extends State<HistoryView> {
     };
   }
 
-  Widget _buildStatChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.navyBlue.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: AppColors.electricBlue),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(color: AppColors.white, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
@@ -491,5 +647,46 @@ class _HistoryViewState extends State<HistoryView> {
     if (ride.duration.inSeconds == 0) return '0.0';
     final speed = ride.distance / (ride.duration.inSeconds / 3600);
     return speed.toStringAsFixed(1);
+  }
+
+  Widget _buildPagination(int showing, int total) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Showing 1 - $showing of $total rides',
+            style: TextStyle(color: AppColors.textBody),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.navyBlue.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: null,
+                icon: const Icon(Icons.chevron_left, color: AppColors.textBody),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: const Text(
+                  '1',
+                  style: TextStyle(color: AppColors.white),
+                ),
+              ),
+              IconButton(
+                onPressed: null,
+                icon: const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textBody,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

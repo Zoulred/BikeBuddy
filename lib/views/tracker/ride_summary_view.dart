@@ -119,48 +119,70 @@ class RideSummaryView extends StatelessWidget {
   }
 
   Widget _buildDetailsGrid() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      childAspectRatio: 2.5,
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 16,
-      children: [
-        _buildDetailItem('Distance', '${ride.distance.toStringAsFixed(2)} km'),
-        _buildDetailItem('Time', ride.duration.toString().split('.').first),
-        _buildDetailItem(
-          'Avg Speed',
-          '${ride.averageSpeed.toStringAsFixed(1)} km/h',
-        ),
-        _buildDetailItem('Calories', '${ride.calories} kcal'),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - 16) / 2; // two items per row
+        final items = [
+          _buildDetailItem(
+            'Distance',
+            '${ride.distance.toStringAsFixed(2)} km',
+            itemWidth,
+          ),
+          _buildDetailItem('Time', _formatDuration(ride.duration), itemWidth),
+          _buildDetailItem(
+            'Avg Speed',
+            '${ride.averageSpeed.toStringAsFixed(1)} km/h',
+            itemWidth,
+          ),
+          _buildDetailItem('Calories', '${ride.calories} kcal', itemWidth),
+        ];
+
+        return Wrap(spacing: 16, runSpacing: 16, children: items);
+      },
     );
   }
 
-  Widget _buildDetailItem(String label, String value) {
-    return GlassBox(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: AppColors.textBody, fontSize: 12),
-            ),
-            Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+  Widget _buildDetailItem(String label, String value, double width) {
+    return SizedBox(
+      width: width,
+      child: GlassBox(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String _formatDuration(Duration d) {
+    final hours = d.inHours.toString().padLeft(2, '0');
+    final minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$seconds';
   }
 }

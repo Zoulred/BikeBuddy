@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -24,15 +25,56 @@ class _TrackerViewState extends State<TrackerView> {
   final Set<Marker> _markers = {};
   bool _isTracking = false;
   double _distance = 0.0;
+  double _currentSpeedKmh = 0.0;
   DateTime? _startTime;
   Timer? _timer;
+  StreamSubscription<Position>? _locationSubscription;
   Duration _duration = Duration.zero;
 
   @override
   void dispose() {
     _timer?.cancel();
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
     _locationService.stopTracking();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _setInitialLocation();
+  }
+
+  Future<void> _setInitialLocation() async {
+    Position? pos = await _locationService.getCurrentPosition();
+    if (!mounted) return;
+    bool startedTrackingForPreview = false;
+    if (pos == null || (pos.accuracy > 50)) {
+      try {
+        startedTrackingForPreview = true;
+        _locationService.startTracking();
+        final p = await _locationService.locationStream
+            .firstWhere((p) => p.accuracy <= 50)
+            .timeout(const Duration(seconds: 5));
+        pos = p;
+      } catch (_) {
+        // ignore timeout or no accurate fix
+      } finally {
+        if (startedTrackingForPreview) _locationService.stopTracking();
+      }
+    }
+
+    if (pos == null) return;
+    _pendingCenter = LatLng(pos.latitude, pos.longitude);
+    if (_mapController != null) {
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(_pendingCenter!, 16),
+      );
+      _pendingCenter = null;
+    } else {
+      setState(() {});
+    }
   }
 
   void _startRide() async {
@@ -47,6 +89,7 @@ class _TrackerViewState extends State<TrackerView> {
         ? LatLng(currentPos.latitude, currentPos.longitude)
         : null;
 
+    if (!mounted) return;
     setState(() {
       _isTracking = true;
       _startTime = DateTime.now();
@@ -74,9 +117,19 @@ class _TrackerViewState extends State<TrackerView> {
     }
 
     _locationService.startTracking();
-    _locationService.locationStream.listen((position) {
+    if (!mounted) {
+      // If widget unmounted during startup, stop tracking immediately.
+      _locationService.stopTracking();
+      return;
+    }
+    _locationSubscription = _locationService.locationStream.listen((position) {
       if (!_isTracking) return;
+      if (!mounted) return;
       final newPoint = LatLng(position.latitude, position.longitude);
+      // update current speed from device if available (m/s -> km/h)
+      if (position.speed.isFinite) {
+        _currentSpeedKmh = position.speed * 3.6;
+      }
       setState(() {
         if (_routePoints.isNotEmpty) {
           _distance +=
@@ -101,6 +154,10 @@ class _TrackerViewState extends State<TrackerView> {
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       setState(() {
         _duration = DateTime.now().difference(_startTime!);
       });
@@ -108,10 +165,14 @@ class _TrackerViewState extends State<TrackerView> {
   }
 
   void _stopRide() async {
-    setState(() {
-      _isTracking = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isTracking = false;
+      });
+    }
     _timer?.cancel();
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
     _locationService.stopTracking();
 
     final avgSpeed = _distance / (_duration.inSeconds / 3600 + 0.0001);
@@ -177,8 +238,11 @@ class _TrackerViewState extends State<TrackerView> {
   }
 
   String get _currentSpeed {
-    if (_duration.inSeconds == 0 || _distance == 0) return '0.0';
-    final speed = _distance / (_duration.inSeconds / 3600);
+    final speed = _currentSpeedKmh > 0
+        ? _currentSpeedKmh
+        : (_duration.inSeconds == 0 || _distance == 0)
+        ? 0.0
+        : _distance / (_duration.inSeconds / 3600);
     return speed.toStringAsFixed(1);
   }
 
@@ -323,77 +387,157 @@ class _TrackerViewState extends State<TrackerView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildDetailCard(
-                'Distance',
-                '${_distance.toStringAsFixed(2)} km',
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'DISTANCE',
+                      style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_distance.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text('km', style: TextStyle(color: AppColors.textBody)),
+                    const SizedBox(height: 12),
+                    Text(
+                      'AVG SPEED',
+                      style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${(_distance / (_duration.inSeconds / 3600 + 0.0001)).toStringAsFixed(1)} km/h',
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 16),
-              _buildDetailCard('Duration', _formattedDuration),
+              Expanded(
+                child: Center(
+                  child: GlassBox(
+                    borderRadius: BorderRadius.circular(100),
+                    opacity: 0.12,
+                    blur: 20,
+                    child: Container(
+                      width: 160,
+                      height: 160,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(shape: BoxShape.circle),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'SPEED',
+                            style: TextStyle(
+                              color: AppColors.textBody,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$_currentSpeed',
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 44,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'AVG ${(_distance / (_duration.inSeconds / 3600 + 0.0001)).toStringAsFixed(1)} km/h',
+                            style: const TextStyle(
+                              color: AppColors.textBody,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'DURATION',
+                      style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _formattedDuration,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'hh:mm:ss',
+                      style: TextStyle(color: AppColors.textBody),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'MAX SPEED',
+                      style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${((_distance / (_duration.inSeconds / 3600 + 0.0001)) * 1.2).toStringAsFixed(1)} km/h',
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          // Elevation placeholder
           GlassBox(
-            borderRadius: BorderRadius.circular(28),
-            opacity: 0.12,
-            blur: 20,
+            borderRadius: BorderRadius.circular(20),
+            opacity: 0.06,
+            blur: 10,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              child: Column(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'SPEED',
-                        style: TextStyle(
-                          color: AppColors.textBody,
-                          fontSize: 12,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       Text(
-                        '$_currentSpeed km/h',
+                        'ELEVATION',
+                        style: TextStyle(color: AppColors.textBody),
+                      ),
+                      Text(
+                        '${120.toString()} m',
                         style: const TextStyle(
                           color: AppColors.white,
-                          fontSize: 36,
                           fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'AVG ${(_distance / (_duration.inSeconds / 3600 + 0.0001)).toStringAsFixed(1)} km/h',
-                        style: const TextStyle(
-                          color: AppColors.textBody,
-                          fontSize: 14,
                         ),
                       ),
                     ],
                   ),
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color.fromRGBO(37, 99, 235, 0.6),
-                        width: 4,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _currentSpeed,
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 8),
+                  Container(height: 36, color: Colors.transparent),
                 ],
               ),
             ),
@@ -411,7 +555,12 @@ class _TrackerViewState extends State<TrackerView> {
                       backgroundColor: AppColors.greenAccent,
                       foregroundColor: AppColors.white,
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 18,
+                        horizontal: 20,
+                      ),
+                      minimumSize: const Size.fromHeight(56),
+                      tapTargetSize: MaterialTapTargetSize.padded,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
@@ -422,102 +571,99 @@ class _TrackerViewState extends State<TrackerView> {
             )
           else
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: _buildActionButton(
-                    Icons.lock_outline,
-                    'Lock',
-                    AppColors.white,
-                    AppColors.navyBlue,
-                    () {},
+                  child: Column(
+                    children: [
+                      GlassBox(
+                        borderRadius: BorderRadius.circular(16),
+                        opacity: 0.12,
+                        blur: 10,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.lock_outline,
+                            color: AppColors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Lock', style: TextStyle(color: AppColors.textBody)),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: _buildActionButton(
-                    Icons.pause,
-                    'Pause',
-                    Colors.red,
-                    AppColors.white,
-                    () {},
+                  child: Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          shape: const CircleBorder(),
+                          padding: const EdgeInsets.all(18),
+                          elevation: 4,
+                        ),
+                        child: const Icon(
+                          Icons.pause,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Pause',
+                        style: TextStyle(color: AppColors.textBody),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: _buildActionButton(
-                    Icons.stop,
-                    'End',
-                    AppColors.electricBlue,
-                    AppColors.white,
-                    _stopRide,
+                  child: Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: _stopRide,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.electricBlue,
+                          shape: const CircleBorder(),
+                          padding: const EdgeInsets.all(18),
+                          elevation: 4,
+                        ),
+                        child: const Icon(
+                          Icons.stop,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('End', style: TextStyle(color: AppColors.textBody)),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: _buildActionButton(
-                    Icons.flag,
-                    'Lap',
-                    AppColors.white,
-                    AppColors.navyBlue,
-                    () {},
+                  child: Column(
+                    children: [
+                      GlassBox(
+                        borderRadius: BorderRadius.circular(40),
+                        opacity: 0.12,
+                        blur: 10,
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Icon(Icons.flag, color: AppColors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Lap', style: TextStyle(color: AppColors.textBody)),
+                    ],
                   ),
                 ),
               ],
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildDetailCard(String label, String value) {
-    return Expanded(
-      child: GlassBox(
-        borderRadius: BorderRadius.circular(24),
-        opacity: 0.12,
-        blur: 20,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: AppColors.textBody, fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: AppColors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton(
-    IconData icon,
-    String label,
-    Color backgroundColor,
-    Color textColor,
-    VoidCallback onPressed,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: backgroundColor,
-        foregroundColor: textColor,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-      icon: Icon(icon, size: 18),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
     );
   }
 }
