@@ -113,7 +113,7 @@ class _HistoryViewState extends State<HistoryView> {
       },
       {
         'label': 'Distance',
-        'value': '${totalDistance.toStringAsFixed(1)} km',
+        'value': '${_formatDistanceNumber(totalDistance)} km',
         'color': AppColors.electricBlue,
       },
       {
@@ -185,15 +185,22 @@ class _HistoryViewState extends State<HistoryView> {
             style: TextStyle(color: AppColors.textBody, fontSize: 12),
           ),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -358,7 +365,7 @@ class _HistoryViewState extends State<HistoryView> {
                           fit: FlexFit.loose,
                           child: _buildStatCompact(
                             Icons.place,
-                            '${ride.distance.toStringAsFixed(2)}',
+                            _formatDistanceNumber(ride.distance),
                             'km',
                           ),
                         ),
@@ -422,7 +429,7 @@ class _HistoryViewState extends State<HistoryView> {
                               fit: FlexFit.loose,
                               child: _buildStatColumnSimple(
                                 Icons.place,
-                                '${ride.distance.toStringAsFixed(2)}',
+                                _formatDistanceNumber(ride.distance),
                                 'km',
                               ),
                             ),
@@ -489,15 +496,21 @@ class _HistoryViewState extends State<HistoryView> {
           children: [
             Icon(icon, size: 14, color: AppColors.electricBlue),
             const SizedBox(width: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -513,15 +526,19 @@ class _HistoryViewState extends State<HistoryView> {
         Icon(icon, size: 14, color: AppColors.electricBlue),
         const SizedBox(width: 6),
         Flexible(
-          child: Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
         if (unit.isNotEmpty) const SizedBox(width: 6),
@@ -647,6 +664,30 @@ class _HistoryViewState extends State<HistoryView> {
     if (ride.duration.inSeconds == 0) return '0.0';
     final speed = ride.distance / (ride.duration.inSeconds / 3600);
     return speed.toStringAsFixed(1);
+  }
+
+  // Compact formatting helpers to avoid overflow with very large numbers
+  String _formatDistanceNumber(double km) {
+    if (km >= 1000) {
+      final rounded =
+          (km / 1000 * 10).round() / 10; // one decimal for thousands
+      return '${_withCommas(rounded.toString())}k';
+    }
+    return _withCommas(km.toStringAsFixed(km >= 10 ? 1 : 2));
+  }
+
+  String _withCommas(String s) {
+    if (s.contains('.')) {
+      final parts = s.split('.');
+      final intPart = parts[0];
+      final frac = parts[1];
+      final formatted = intPart.replaceAllMapped(
+        RegExp(r'\B(?=(\d{3})+(?!\d))'),
+        (m) => ',',
+      );
+      return '$formatted.$frac';
+    }
+    return s.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
   }
 
   Widget _buildPagination(int showing, int total) {

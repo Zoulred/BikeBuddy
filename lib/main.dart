@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'core/app_theme.dart';
 import 'viewmodels/bike_viewmodel.dart';
 import 'viewmodels/ride_viewmodel.dart';
-import 'views/home_screen.dart';
+import 'views/Homescreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

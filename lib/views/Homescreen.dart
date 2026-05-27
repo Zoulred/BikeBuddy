@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/app_colors.dart';
-import 'dashboard/dashboard_view.dart';
-import 'tracker/tracker_view.dart';
-import 'history/history_view.dart';
+import 'dashboard/Dashboard.dart';
+import 'tracker/Tracker.dart';
+import 'history/History.dart';
 import 'garage/garage_view.dart';
 import 'profile/profile_view.dart';
 
