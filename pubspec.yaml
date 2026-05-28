@@ -25,7 +25,6 @@ dependencies:
   permission_handler: ^11.3.0
   font_awesome_flutter: ^10.7.0
   flutter_screenutil: ^5.7.0
-  share_plus: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -37,6 +36,7 @@ dev_dependencies:
 flutter:
 
   uses-material-design: true
+
 
 
 

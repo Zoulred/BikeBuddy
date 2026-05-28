@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/ride.dart';
-import '../../services/location_service.dart';
-import '../../services/database_service.dart';
+import '../../services/LocationInfo.dart';
+import '../../services/Datehandle.dart';
 import 'ride_timer_service.dart';
 import 'package:geolocator/geolocator.dart';
 

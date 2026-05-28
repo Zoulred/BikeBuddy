@@ -5,7 +5,7 @@ import '../../core/app_theme.dart';
 import '../../viewmodels/bike_viewmodel.dart';
 import '../../models/bike.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'add_bike_view.dart';
+import 'Addbikes.dart';
 
 class GarageView extends StatelessWidget {
   const GarageView({super.key});

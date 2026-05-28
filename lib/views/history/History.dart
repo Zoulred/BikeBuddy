@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/app_colors.dart';
-import '../../core/app_theme.dart';
-import '../../viewmodels/ride_viewmodel.dart';
 import '../../models/ride.dart';
+import '../../viewmodels/ride_viewmodel.dart';
 import '../tracker/ride_summary_view.dart';
 
 class HistoryView extends StatefulWidget {
@@ -21,147 +20,946 @@ class _HistoryViewState extends State<HistoryView> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Ride History')),
-      body: Consumer<RideViewModel>(
-        builder: (context, viewModel, child) {
-          if (viewModel.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      backgroundColor: const Color(0xff020817),
+      body: SafeArea(
+        child: Consumer<RideViewModel>(
+          builder: (context, viewModel, child) {
+            if (viewModel.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final filteredRides = _applyFilters(viewModel.rides);
+            final filteredRides = _applyFilters(viewModel.rides);
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(viewModel.rides),
-                const SizedBox(height: 20),
-                _buildTabBar(),
-                const SizedBox(height: 20),
-                _buildSearchAndSortRow(),
-                const SizedBox(height: 20),
-                if (filteredRides.isEmpty)
-                  _buildEmptyState()
-                else ...[
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredRides.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      return _buildRideCard(context, filteredRides[index]);
-                    },
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    size.width * .04,
+                    14,
+                    size.width * .04,
+                    30,
                   ),
-                  const SizedBox(height: 12),
-                  _buildPagination(
-                    filteredRides.length,
-                    viewModel.rides.length,
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildTopBar(size),
+                      const SizedBox(height: 26),
+
+                      _buildTabBar(size),
+                      const SizedBox(height: 24),
+
+                      _buildSummaryCard(viewModel.rides, size),
+                      const SizedBox(height: 20),
+
+                      _buildSearchSort(size),
+                      const SizedBox(height: 18),
+
+                      if (filteredRides.isEmpty)
+                        _buildEmptyState()
+                      else
+                        ...filteredRides.map(
+                          (ride) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _buildRideCard(ride, size),
+                          ),
+                        ),
+
+                      const SizedBox(height: 8),
+
+                      _buildPagination(
+                        filteredRides.length,
+                        viewModel.rides.length,
+                        size,
+                      ),
+                    ]),
                   ),
-                ],
+                ),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
 
-  List<Ride> _applyFilters(List<Ride> rides) {
-    final now = DateTime.now();
-    final lowerQuery = _searchQuery.toLowerCase();
-    final filteredByQuery = rides.where((ride) {
-      return ride.title.toLowerCase().contains(lowerQuery) ||
-          ride.dateTime.toIso8601String().contains(lowerQuery) ||
-          ride.distance.toStringAsFixed(1).contains(lowerQuery);
-    }).toList();
+  // =========================================================
+  // TOP BAR
+  // =========================================================
 
-    return filteredByQuery.where((ride) {
-      switch (_selectedTab) {
-        case 1:
-          return ride.dateTime.isAfter(now.subtract(const Duration(days: 7)));
-        case 2:
-          return ride.dateTime.isAfter(now.subtract(const Duration(days: 30)));
-        case 3:
-          return ride.dateTime.isAfter(now.subtract(const Duration(days: 365)));
-        default:
-          return true;
-      }
-    }).toList();
+  Widget _buildTopBar(Size size) {
+    return Row(
+      children: [
+        _topIcon(Icons.menu),
+
+        SizedBox(width: size.width * .04),
+
+        Expanded(
+          child: Text(
+            'Ride History',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: size.width < 400 ? 24 : 30,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+
+        _topIcon(Icons.filter_alt_outlined),
+
+        const SizedBox(width: 12),
+
+        _topIcon(Icons.calendar_today_outlined),
+      ],
+    );
   }
 
-  Widget _buildHeader(List<Ride> rides) {
+  Widget _topIcon(IconData icon) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(.05)),
+        color: Colors.white.withOpacity(.03),
+      ),
+      child: Icon(icon, color: Colors.white, size: 22),
+    );
+  }
+
+  // =========================================================
+  // TAB BAR
+  // =========================================================
+
+  Widget _buildTabBar(Size size) {
+    final tabs = ['All Rides', 'This Week', 'This Month', 'This Year'];
+
+    return SizedBox(
+      height: 44,
+      child: Row(
+        children: List.generate(tabs.length, (index) {
+          final selected = _selectedTab == index;
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedTab = index;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: selected
+                          ? AppColors.electricBlue
+                          : Colors.white.withOpacity(.08),
+                      width: selected ? 3 : 1,
+                    ),
+                  ),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    tabs[index],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selected
+                          ? AppColors.electricBlue
+                          : AppColors.textBody,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: size.width < 400 ? 12 : 15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  // =========================================================
+  // SUMMARY CARD
+  // =========================================================
+
+  Widget _buildSummaryCard(List<Ride> rides, Size size) {
     final tabRides = _applyFilters(rides);
+
     final totalDistance = tabRides.fold<double>(
-      0.0,
-      (sum, ride) => sum + ride.distance,
+      0,
+      (sum, item) => sum + item.distance,
     );
-    final totalDuration = tabRides.fold<Duration>(
-      Duration.zero,
-      (sum, ride) => sum + ride.duration,
-    );
+
     final totalCalories = tabRides.fold<int>(
       0,
-      (sum, ride) => sum + ride.calories,
+      (sum, item) => sum + item.calories,
     );
 
-    final entries = [
-      {
-        'label': 'Total Rides',
-        'value': '${tabRides.length}',
-        'color': AppColors.greenAccent,
-      },
-      {
-        'label': 'Distance',
-        'value': '${_formatDistanceNumber(totalDistance)} km',
-        'color': AppColors.electricBlue,
-      },
-      {
-        'label': 'Duration',
-        'value': _formatDuration(totalDuration),
-        'color': Colors.amber,
-      },
-      {
-        'label': 'Calories',
-        'value': '$totalCalories',
-        'color': Colors.redAccent,
-      },
-    ];
+    final totalDuration = tabRides.fold<Duration>(
+      Duration.zero,
+      (sum, item) => sum + item.duration,
+    );
 
-    return GlassBox(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Your Cycling Summary',
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: 18,
+    final isMobile = size.width < 700;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _glassDecoration(),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Your Cycling Summary',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isMobile ? 20 : 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.04),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withOpacity(.05)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Flexible(
+                        child: Text(
+                          'This Year',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth < 700
+                  ? (constraints.maxWidth - 12) / 2
+                  : (constraints.maxWidth - 24) / 4;
+
+              return Wrap(
+                spacing: 8,
+                runSpacing: 12,
+                children: [
+                  _summaryItem(
+                    width: cardWidth,
+                    icon: Icons.route,
+                    color: Colors.greenAccent,
+                    value: '${tabRides.length}',
+                    label: 'Total Rides',
+                  ),
+
+                  _summaryItem(
+                    width: cardWidth,
+                    icon: Icons.timeline,
+                    color: AppColors.electricBlue,
+                    value: _formatDistance(totalDistance),
+                    label: 'Total Distance',
+                  ),
+
+                  _summaryItem(
+                    width: cardWidth,
+                    icon: Icons.access_time_filled_rounded,
+                    color: Colors.amber,
+                    value: _formatDuration(totalDuration),
+                    label: 'Total Duration',
+                  ),
+
+                  _summaryItem(
+                    width: cardWidth,
+                    icon: Icons.local_fire_department,
+                    color: Colors.redAccent,
+                    value: _withCommas('$totalCalories'),
+                    label: 'Total Calories',
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryItem({
+    required double width,
+    required IconData icon,
+    required Color color,
+    required String value,
+    required String label,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+
+          const SizedBox(height: 12),
+
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final itemWidth = (constraints.maxWidth - 12) / 2;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: entries.map((e) {
-                    return SizedBox(
-                      width: itemWidth,
-                      child: _buildSummaryCard(
-                        e['label'] as String,
-                        e['value'] as String,
-                        e['color'] as Color,
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textBody.withOpacity(.85),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // SEARCH
+  // =========================================================
+
+  Widget _buildSearchSort(Size size) {
+    final mobile = size.width < 500;
+
+    return mobile
+        ? Column(
+            children: [
+              Container(
+                height: 58,
+                decoration: _glassDecoration(),
+                child: TextField(
+                  style: const TextStyle(color: Colors.white),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: AppColors.textBody.withOpacity(.7),
+                    ),
+                    hintText: 'Search rides...',
+                    hintStyle: TextStyle(
+                      color: AppColors.textBody.withOpacity(.7),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              Container(
+                width: double.infinity,
+                height: 56,
+                decoration: _glassDecoration(),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Text(
+                      'Sort: Newest',
+                      style: TextStyle(
+                        color: AppColors.electricBlue,
+                        fontWeight: FontWeight.w600,
                       ),
-                    );
-                  }).toList(),
-                );
-              },
+                    ),
+                    SizedBox(width: 6),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppColors.electricBlue,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 58,
+                  decoration: _glassDecoration(),
+                  child: TextField(
+                    style: const TextStyle(color: Colors.white),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: AppColors.textBody.withOpacity(.7),
+                      ),
+                      hintText: 'Search rides...',
+                      hintStyle: TextStyle(
+                        color: AppColors.textBody.withOpacity(.7),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              Container(
+                height: 58,
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                decoration: _glassDecoration(),
+                child: Row(
+                  children: const [
+                    Text(
+                      'Sort: Newest',
+                      style: TextStyle(
+                        color: AppColors.electricBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppColors.electricBlue,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+  }
+
+  // =========================================================
+  // RIDE CARD
+  // =========================================================
+
+  Widget _buildRideCard(Ride ride, Size size) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => RideSummaryView(ride: ride)),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: _glassDecoration(),
+        child: size.width < 650
+            ? _buildMobileRideCard(ride, size)
+            : _buildDesktopRideCard(ride),
+      ),
+    );
+  }
+
+  Widget _buildMobileRideCard(Ride ride, Size size) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildRideMapPreview(ride, size),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: SizedBox(
+                height: 120,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ride.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size.width < 400 ? 18 : 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} • ${_formatTime(ride.dateTime)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textBody.withOpacity(.85),
+                        fontSize: 13,
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    Row(
+                      children: const [
+                        Icon(
+                          Icons.wb_sunny_rounded,
+                          color: Colors.amber,
+                          size: 18,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          '26°C',
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 6),
+
+            const Icon(Icons.chevron_right, color: Colors.white54),
+          ],
+        ),
+
+        const SizedBox(height: 18),
+
+        Row(
+          children: [
+            Expanded(
+              child: _rideStat(
+                icon: Icons.place,
+                value: ride.distance.toStringAsFixed(2),
+                unit: 'km',
+                color: Colors.greenAccent,
+              ),
+            ),
+
+            _divider(),
+
+            Expanded(
+              child: _rideStat(
+                icon: Icons.access_time_filled_rounded,
+                value: _formatDuration(ride.duration),
+                unit: 'time',
+                color: AppColors.electricBlue,
+              ),
+            ),
+
+            _divider(),
+
+            Expanded(
+              child: _rideStat(
+                icon: Icons.speed,
+                value: _getAverageSpeed(ride),
+                unit: 'km/h',
+                color: Colors.amber,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopRideCard(Ride ride) {
+    return Row(
+      children: [
+        _buildRideMapPreview(ride, const Size(1000, 1000)),
+
+        const SizedBox(width: 18),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                ride.title,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} • ${_formatTime(ride.dateTime)}',
+                style: TextStyle(
+                  color: AppColors.textBody.withOpacity(.85),
+                  fontSize: 15,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _rideStat(
+                      icon: Icons.place,
+                      value: ride.distance.toStringAsFixed(2),
+                      unit: 'km',
+                      color: Colors.greenAccent,
+                    ),
+                  ),
+
+                  _divider(),
+
+                  Expanded(
+                    child: _rideStat(
+                      icon: Icons.access_time_filled_rounded,
+                      value: _formatDuration(ride.duration),
+                      unit: 'time',
+                      color: AppColors.electricBlue,
+                    ),
+                  ),
+
+                  _divider(),
+
+                  Expanded(
+                    child: _rideStat(
+                      icon: Icons.speed,
+                      value: _getAverageSpeed(ride),
+                      unit: 'km/h',
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(width: 20),
+
+        Column(
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.wb_sunny_rounded, color: Colors.amber),
+                SizedBox(width: 6),
+                Text('26°C', style: TextStyle(color: Colors.white70)),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            const Icon(Icons.chevron_right, color: Colors.white54),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _rideStat({
+    required IconData icon,
+    required String value,
+    required String unit,
+    required Color color,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+
+            const SizedBox(width: 6),
+
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 6),
+
+        Padding(
+          padding: const EdgeInsets.only(left: 24),
+          child: Text(
+            unit,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textBody.withOpacity(.8),
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divider() {
+    return Container(
+      width: 1,
+      height: 42,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.white10,
+    );
+  }
+
+  // =========================================================
+  // MAP
+  // =========================================================
+
+  Widget _buildRideMapPreview(Ride ride, Size size) {
+    final mapWidth = size.width < 400 ? 110.0 : 140.0;
+
+    if (ride.route.isEmpty) {
+      return Container(
+        width: mapWidth,
+        height: 120,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Colors.white.withOpacity(.04),
+        ),
+        child: const Icon(Icons.map, color: Colors.white54),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        width: mapWidth,
+        height: 120,
+        child: GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: ride.route.first,
+            zoom: 13,
+          ),
+          zoomControlsEnabled: false,
+          scrollGesturesEnabled: false,
+          rotateGesturesEnabled: false,
+          tiltGesturesEnabled: false,
+          zoomGesturesEnabled: false,
+          myLocationButtonEnabled: false,
+          mapToolbarEnabled: false,
+          markers: {
+            Marker(
+              markerId: const MarkerId('start'),
+              position: ride.route.first,
+            ),
+            Marker(markerId: const MarkerId('end'), position: ride.route.last),
+          },
+          polylines: {
+            Polyline(
+              polylineId: const PolylineId('route'),
+              points: ride.route,
+              color: Colors.greenAccent,
+              width: 5,
+            ),
+          },
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // PAGINATION
+  // =========================================================
+
+  Widget _buildPagination(int showing, int total, Size size) {
+    final mobile = size.width < 600;
+
+    return mobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Showing 1 - $showing of $total rides',
+                style: TextStyle(
+                  color: AppColors.textBody.withOpacity(.8),
+                  fontSize: 13,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _pageButton(Icons.chevron_left),
+                    const SizedBox(width: 8),
+                    _numberButton('1', true),
+                    _numberButton('2', false),
+                    _numberButton('3', false),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        '...',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                    _numberButton('26', false),
+                    const SizedBox(width: 8),
+                    _pageButton(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Showing 1 - $showing of $total rides',
+                  style: TextStyle(
+                    color: AppColors.textBody.withOpacity(.8),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+
+              Row(
+                children: [
+                  _pageButton(Icons.chevron_left),
+
+                  const SizedBox(width: 8),
+
+                  _numberButton('1', true),
+                  _numberButton('2', false),
+                  _numberButton('3', false),
+
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6),
+                    child: Text('...', style: TextStyle(color: Colors.white54)),
+                  ),
+
+                  _numberButton('26', false),
+
+                  const SizedBox(width: 8),
+
+                  _pageButton(Icons.chevron_right),
+                ],
+              ),
+            ],
+          );
+  }
+
+  Widget _pageButton(IconData icon) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(.04),
+      ),
+      child: Icon(icon, color: Colors.white70),
+    );
+  }
+
+  Widget _numberButton(String text, bool active) {
+    return Container(
+      width: 42,
+      height: 42,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: active ? AppColors.electricBlue : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: TextStyle(
+          color: active ? Colors.white : Colors.white70,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // EMPTY
+  // =========================================================
+
+  Widget _buildEmptyState() {
+    return SizedBox(
+      height: 300,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.history, size: 80, color: Colors.white.withOpacity(.15)),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              'No rides found',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              'Your ride history will appear here',
+              style: TextStyle(color: AppColors.textBody.withOpacity(.8)),
             ),
           ],
         ),
@@ -169,519 +967,69 @@ class _HistoryViewState extends State<HistoryView> {
     );
   }
 
-  Widget _buildSummaryCard(String label, String value, Color color) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.navyBlue.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(color: AppColors.textBody, fontSize: 12),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // =========================================================
+  // DECORATION
+  // =========================================================
 
-  Widget _buildTabBar() {
-    final tabs = ['All Rides', 'This Week', 'This Month', 'This Year'];
-    return GlassBox(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(tabs.length, (index) {
-            final selected = index == _selectedTab;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedTab = index),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.electricBlue
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Center(
-                    child: Text(
-                      tabs[index],
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: selected ? AppColors.white : AppColors.textBody,
-                        fontSize: 12,
-                        fontWeight: selected
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
+  BoxDecoration _glassDecoration() {
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(28),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xff0B1220), Color(0xff101A2F)],
       ),
-    );
-  }
-
-  Widget _buildSearchAndSortRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: GlassBox(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: TextField(
-                style: const TextStyle(color: AppColors.white),
-                decoration: InputDecoration(
-                  hintText: 'Search rides...',
-                  hintStyle: TextStyle(color: AppColors.textBody),
-                  border: InputBorder.none,
-                  icon: const Icon(Icons.search, color: AppColors.textBody),
-                ),
-                onChanged: (value) => setState(() => _searchQuery = value),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        GlassBox(
-          child: InkWell(
-            onTap: () {},
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: const [
-                  Text(
-                    'Sort: Newest',
-                    style: TextStyle(color: AppColors.white),
-                  ),
-                  SizedBox(width: 8),
-                  Icon(Icons.keyboard_arrow_down, color: AppColors.white),
-                ],
-              ),
-            ),
-          ),
+      border: Border.all(color: Colors.white.withOpacity(.05)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.25),
+          blurRadius: 24,
+          offset: const Offset(0, 10),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.history_rounded,
-            size: 80,
-            color: AppColors.textBody.withOpacity(0.3),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'No rides recorded',
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your cycling adventures will appear here',
-            style: TextStyle(color: AppColors.textBody),
-          ),
-        ],
-      ),
-    );
+  // =========================================================
+  // FILTERS
+  // =========================================================
+
+  List<Ride> _applyFilters(List<Ride> rides) {
+    final now = DateTime.now();
+
+    final filteredBySearch = rides.where((ride) {
+      final query = _searchQuery.toLowerCase();
+
+      return ride.title.toLowerCase().contains(query) ||
+          ride.distance.toString().contains(query);
+    }).toList();
+
+    return filteredBySearch.where((ride) {
+      switch (_selectedTab) {
+        case 1:
+          return ride.dateTime.isAfter(now.subtract(const Duration(days: 7)));
+
+        case 2:
+          return ride.dateTime.isAfter(now.subtract(const Duration(days: 30)));
+
+        case 3:
+          return ride.dateTime.isAfter(now.subtract(const Duration(days: 365)));
+
+        default:
+          return true;
+      }
+    }).toList();
   }
 
-  Widget _buildRideCard(BuildContext context, Ride ride) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => RideSummaryView(ride: ride)),
-      ),
-      child: GlassBox(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 420;
-              if (narrow) {
-                // Compact stacked card for narrow screens
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildRideMapPreview(ride),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  ride.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.navyBlue.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.wb_sunny,
-                                  color: Colors.orange,
-                                  size: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AppColors.textBody,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.navyBlue.withOpacity(0.04),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildStatBlock(
-                                  Icons.place,
-                                  _formatDistanceNumber(ride.distance),
-                                  'km',
-                                ),
-                                _verticalDivider(),
-                                _buildStatBlock(
-                                  Icons.access_time,
-                                  _formatDuration(ride.duration),
-                                  '',
-                                ),
-                                _verticalDivider(),
-                                _buildStatBlock(
-                                  Icons.speed,
-                                  _getAverageSpeed(ride),
-                                  'km/h',
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              // Default wide layout
-              return Row(
-                children: [
-                  _buildRideMapPreview(ride),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                ride.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: AppColors.navyBlue.withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.wb_sunny,
-                                color: Colors.orange,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: () {
-                                final summary =
-                                    '${ride.title}\n${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}\nDistance: ${ride.distance.toStringAsFixed(2)} km\nDuration: ${_formatDuration(ride.duration)}\nAvg: ${ride.averageSpeed.toStringAsFixed(1)} km/h\nCalories: ${ride.calories} kcal\n#BikeBuddy';
-                                Share.share(
-                                  summary,
-                                  subject: 'My Ride Summary',
-                                );
-                              },
-                              icon: const Icon(
-                                Icons.share,
-                                color: AppColors.electricBlue,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.textBody,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.textBody,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.navyBlue.withOpacity(0.04),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _buildStatBlock(
-                                  Icons.place,
-                                  _formatDistanceNumber(ride.distance),
-                                  'km',
-                                ),
-                              ),
-                              _verticalDivider(),
-                              Expanded(
-                                child: _buildStatBlock(
-                                  Icons.access_time,
-                                  _formatDuration(ride.duration),
-                                  '',
-                                ),
-                              ),
-                              _verticalDivider(),
-                              Expanded(
-                                child: _buildStatBlock(
-                                  Icons.speed,
-                                  _getAverageSpeed(ride),
-                                  'km/h',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatBlock(IconData icon, String value, String unit) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: AppColors.navyBlue.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: AppColors.electricBlue),
-        ),
-        const SizedBox(height: 8),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(unit, style: TextStyle(color: AppColors.textBody, fontSize: 12)),
-      ],
-    );
-  }
-
-  Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      height: 40,
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      color: Colors.white.withOpacity(0.06),
-    );
-  }
-
-  Widget _buildRideMapPreview(Ride ride) {
-    if (ride.route.isEmpty) {
-      return Container(
-        width: 120,
-        height: 100,
-        decoration: BoxDecoration(
-          color: AppColors.navyBlue.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Center(child: Icon(Icons.map, color: AppColors.textBody)),
-      );
-    }
-
-    final initialPosition = _routeCenter(ride);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        width: 120,
-        height: 100,
-        child: GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: initialPosition,
-            zoom: 13,
-          ),
-          onMapCreated: (controller) {
-            final bounds = _routeBounds(ride);
-            if (bounds != null) {
-              controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 8));
-            }
-          },
-          markers: _routeMarkers(ride),
-          polylines: _routePolylines(ride),
-          mapType: MapType.normal,
-          zoomControlsEnabled: false,
-          myLocationButtonEnabled: false,
-          mapToolbarEnabled: false,
-          scrollGesturesEnabled: false,
-          zoomGesturesEnabled: false,
-          tiltGesturesEnabled: false,
-          rotateGesturesEnabled: false,
-        ),
-      ),
-    );
-  }
-
-  LatLng _routeCenter(Ride ride) {
-    final lats = ride.route.map((p) => p.latitude).toList();
-    final lngs = ride.route.map((p) => p.longitude).toList();
-    final centerLat = (lats.reduce((a, b) => a + b) / lats.length);
-    final centerLng = (lngs.reduce((a, b) => a + b) / lngs.length);
-    return LatLng(centerLat, centerLng);
-  }
-
-  LatLngBounds? _routeBounds(Ride ride) {
-    if (ride.route.length < 2) return null;
-    final south = ride.route
-        .map((p) => p.latitude)
-        .reduce((a, b) => a < b ? a : b);
-    final north = ride.route
-        .map((p) => p.latitude)
-        .reduce((a, b) => a > b ? a : b);
-    final west = ride.route
-        .map((p) => p.longitude)
-        .reduce((a, b) => a < b ? a : b);
-    final east = ride.route
-        .map((p) => p.longitude)
-        .reduce((a, b) => a > b ? a : b);
-    return LatLngBounds(
-      southwest: LatLng(south, west),
-      northeast: LatLng(north, east),
-    );
-  }
-
-  Set<Marker> _routeMarkers(Ride ride) {
-    return {
-      Marker(
-        markerId: const MarkerId('start_marker'),
-        position: ride.route.first,
-      ),
-      Marker(markerId: const MarkerId('end_marker'), position: ride.route.last),
-    };
-  }
-
-  Set<Polyline> _routePolylines(Ride ride) {
-    return {
-      Polyline(
-        polylineId: const PolylineId('route_preview'),
-        points: ride.route,
-        color: AppColors.greenAccent,
-        width: 3,
-      ),
-    };
-  }
+  // =========================================================
+  // HELPERS
+  // =========================================================
 
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
+
     return [
       if (hours > 0) hours.toString().padLeft(2, '0'),
       minutes.toString().padLeft(2, '0'),
@@ -692,77 +1040,28 @@ class _HistoryViewState extends State<HistoryView> {
   String _formatTime(DateTime dateTime) {
     final hour = dateTime.hour.toString().padLeft(2, '0');
     final minute = dateTime.minute.toString().padLeft(2, '0');
+
     return '$hour:$minute';
   }
 
   String _getAverageSpeed(Ride ride) {
-    if (ride.duration.inSeconds == 0) return '0.0';
+    if (ride.duration.inSeconds == 0) {
+      return '0.0';
+    }
+
     final speed = ride.distance / (ride.duration.inSeconds / 3600);
+
     return speed.toStringAsFixed(1);
   }
 
-  // Compact formatting helpers to avoid overflow with very large numbers
-  String _formatDistanceNumber(double km) {
-    if (km >= 1000) {
-      final rounded =
-          (km / 1000 * 10).round() / 10; // one decimal for thousands
-      return '${_withCommas(rounded.toString())}k';
-    }
-    return _withCommas(km.toStringAsFixed(km >= 10 ? 1 : 2));
+  String _formatDistance(double value) {
+    return _withCommas(value.toStringAsFixed(1));
   }
 
-  String _withCommas(String s) {
-    if (s.contains('.')) {
-      final parts = s.split('.');
-      final intPart = parts[0];
-      final frac = parts[1];
-      final formatted = intPart.replaceAllMapped(
-        RegExp(r'\B(?=(\d{3})+(?!\d))'),
-        (m) => ',',
-      );
-      return '$formatted.$frac';
-    }
-    return s.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
-  }
-
-  Widget _buildPagination(int showing, int total) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Showing 1 - $showing of $total rides',
-            style: TextStyle(color: AppColors.textBody),
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.navyBlue.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: null,
-                icon: const Icon(Icons.chevron_left, color: AppColors.textBody),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: const Text(
-                  '1',
-                  style: TextStyle(color: AppColors.white),
-                ),
-              ),
-              IconButton(
-                onPressed: null,
-                icon: const Icon(
-                  Icons.chevron_right,
-                  color: AppColors.textBody,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+  String _withCommas(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (match) => ',',
     );
   }
 }

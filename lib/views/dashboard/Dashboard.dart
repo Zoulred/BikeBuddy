@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../viewmodels/ride_viewmodel.dart';
+import '../profile/profile_view.dart';
 
 class DashboardView extends StatelessWidget {
   const DashboardView({super.key});
@@ -32,32 +35,51 @@ class DashboardView extends StatelessWidget {
   }
 
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Consumer<RideViewModel>(
+      builder: (context, vm, child) {
+        final totalDistance = vm.rides.fold<double>(
+          0,
+          (p, e) => p + e.distance,
+        );
+        final rideCount = vm.rides.length;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Mabuhay, Cyclist!',
-              style: TextStyle(color: AppColors.textBody, fontSize: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Mabuhay, Cyclist!',
+                  style: TextStyle(color: AppColors.textBody, fontSize: 16),
+                ),
+                const Text(
+                  'BikeBuddy PH',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${rideCount} rides · ${totalDistance.toStringAsFixed(1)} km',
+                  style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                ),
+              ],
             ),
-            const Text(
-              'BikeBuddy PH',
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
+            GestureDetector(
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileView())),
+              child: const CircleAvatar(
+                radius: 25,
+                backgroundColor: AppColors.electricBlue,
+                child: Icon(Icons.person, color: AppColors.white),
               ),
             ),
           ],
-        ),
-        const CircleAvatar(
-          radius: 25,
-          backgroundColor: AppColors.electricBlue,
-          child: Icon(Icons.person, color: AppColors.white),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -129,6 +151,25 @@ class DashboardView extends StatelessWidget {
   }
 
   Widget _buildStatsGrid(BuildContext context) {
+    final vm = Provider.of<RideViewModel>(context);
+    final now = DateTime.now();
+    final todays = vm.rides.where(
+      (r) =>
+          r.dateTime.year == now.year &&
+          r.dateTime.month == now.month &&
+          r.dateTime.day == now.day,
+    );
+
+    final totalDistance = todays.fold<double>(0.0, (s, r) => s + r.distance);
+    final totalDuration = todays.fold<Duration>(
+      Duration.zero,
+      (s, r) => s + r.duration,
+    );
+    final totalCalories = todays.fold<int>(0, (s, r) => s + r.calories);
+    final avgSpeed = totalDuration.inSeconds > 0
+        ? totalDistance / (totalDuration.inSeconds / 3600)
+        : 0.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -151,25 +192,25 @@ class DashboardView extends StatelessWidget {
           children: [
             _buildStatCard(
               'Distance',
-              '0.0 km',
+              '${totalDistance.toStringAsFixed(2)} km',
               Icons.route_rounded,
               AppColors.electricBlue,
             ),
             _buildStatCard(
               'Duration',
-              '00:00:00',
+              '${totalDuration.inHours.toString().padLeft(2, '0')}:${(totalDuration.inMinutes % 60).toString().padLeft(2, '0')}:${(totalDuration.inSeconds % 60).toString().padLeft(2, '0')}',
               Icons.timer_rounded,
               AppColors.greenAccent,
             ),
             _buildStatCard(
               'Calories',
-              '0 kcal',
+              '$totalCalories kcal',
               Icons.local_fire_department_rounded,
               Colors.orange,
             ),
             _buildStatCard(
               'Avg Speed',
-              '0.0 km/h',
+              '${avgSpeed.toStringAsFixed(1)} km/h',
               Icons.speed_rounded,
               Colors.purple,
             ),

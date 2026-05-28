@@ -4,7 +4,7 @@ import '../core/app_colors.dart';
 import 'dashboard/Dashboard.dart';
 import 'tracker/Tracker.dart';
 import 'history/History.dart';
-import 'garage/garage_view.dart';
+import 'garage/GaregeScreen.dart';
 import 'profile/profile_view.dart';
 
 class HomeScreen extends StatefulWidget {
