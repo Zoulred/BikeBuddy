@@ -22,7 +22,9 @@ class DashboardView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
+              _buildActiveBikePreview(context),
+              const SizedBox(height: 20),
               _buildQuickStart(context),
               const SizedBox(height: 30),
               _buildStatsGrid(context),
@@ -223,6 +225,45 @@ class DashboardView extends StatelessWidget {
     );
   }
 
+  Widget _buildActiveBikePreview(BuildContext context) {
+    return Consumer<BikeViewModel>(builder: (context, vm, _) {
+      final bike = vm.activeBike;
+      if (bike == null) return const SizedBox.shrink();
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.navyBlue.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: bike.imagePath != null
+                  ? Image.asset(bike.imagePath!, width: 96, height: 72, fit: BoxFit.cover)
+                  : const Icon(Icons.directions_bike, size: 48, color: AppColors.electricBlue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(bike.name, style: const TextStyle(color: AppColors.white, fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  Text('${bike.totalKilometers.toStringAsFixed(0)} km · ${bike.maintenanceStatus}', style: TextStyle(color: AppColors.textBody)),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileView())),
+              icon: const Icon(Icons.chevron_right, color: AppColors.textBody),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   Widget _buildStatCard(
     String title,
     String value,
@@ -356,6 +397,8 @@ class DashboardView extends StatelessWidget {
                               const SizedBox(height: 6),
                               Text(
                                 '${r.distance.toStringAsFixed(2)} km · ${_formatDuration(r.duration)} · ${bike.name}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(color: AppColors.textBody),
                               ),
                             ],

@@ -27,36 +27,40 @@ class GarageView extends StatelessWidget {
               return _buildEmptyState(context);
             }
 
-            final bike = viewModel.bikes.first;
+            final bike = viewModel.activeBike ?? (viewModel.bikes.isNotEmpty ? viewModel.bikes.first : null);
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
               children: [
                 _buildHeader(context),
                 const SizedBox(height: 24),
-                _buildActiveBikeCard(context, bike),
+                if (viewModel.bikes.isNotEmpty) ...[
+                  _buildBikeSelector(context, viewModel),
+                  const SizedBox(height: 20),
+                ],
+                if (bike != null) _buildActiveBikeCard(context, bike),
                 const SizedBox(height: 24),
-                _buildSectionHeader(
-                  'Maintenance Overview',
-                  'View Calendar',
-                  onTap: () {},
-                ),
-                const SizedBox(height: 16),
-                _buildOverviewRow(),
-                const SizedBox(height: 24),
-                _buildReminderCard(),
-                const SizedBox(height: 24),
-                _buildSectionHeader(
-                  'Maintenance History',
-                  'See All',
-                  onTap: () {},
-                ),
-                const SizedBox(height: 16),
-                _buildTimeline(),
-                const SizedBox(height: 24),
-                _buildAddRecordButton(context),
-              ],
-            );
+                  _buildSectionHeader(
+                    'Maintenance Overview',
+                    'View Calendar',
+                    onTap: () {},
+                  ),
+                  const SizedBox(height: 16),
+                  _buildOverviewRow(),
+                  const SizedBox(height: 24),
+                  _buildReminderCard(),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    'Maintenance History',
+                    'See All',
+                    onTap: () {},
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTimeline(),
+                  const SizedBox(height: 24),
+                  _buildAddRecordButton(context),
+                ],
+              );
           },
         ),
       ),
@@ -164,21 +168,12 @@ class GarageView extends StatelessWidget {
                   color: AppColors.electricBlue.withOpacity(0.4),
                   width: 2,
                 ),
-                color: AppColors.electricBlue.withOpacity(0.05),
+                color: AppColors.electricBlue.withOpacity(0.1),
               ),
-              child: ClipOval(
-                child: bike.imagePath != null
-                    ? Image.asset(
-                        bike.imagePath!,
-                        width: 96,
-                        height: 96,
-                        fit: BoxFit.cover,
-                      )
-                    : const Icon(
-                        FontAwesomeIcons.bicycle,
-                        color: AppColors.electricBlue,
-                        size: 34,
-                      ),
+              child: const Icon(
+                FontAwesomeIcons.bicycle,
+                color: AppColors.electricBlue,
+                size: 34,
               ),
             ),
             const SizedBox(width: 18),
@@ -195,17 +190,12 @@ class GarageView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Flexible(
-                    child: Text(
-                      bike.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: true,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Text(
+                    bike.name,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -261,6 +251,55 @@ class GarageView extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBikeSelector(BuildContext context, BikeViewModel vm) {
+    return SizedBox(
+      height: 110,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: vm.bikes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final b = vm.bikes[index];
+          final selected = vm.activeBikeId == b.id;
+          return GestureDetector(
+            onTap: () => vm.setActiveBike(b.id),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected ? AppColors.electricBlue : Colors.white.withOpacity(0.06),
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  ClipOval(
+                    child: b.imagePath != null
+                        ? Image.asset(b.imagePath!, width: 64, height: 64, fit: BoxFit.cover)
+                        : const Icon(FontAwesomeIcons.bicycle, size: 36, color: AppColors.electricBlue),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 80,
+                    child: Text(
+                      b.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: AppColors.textBody, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

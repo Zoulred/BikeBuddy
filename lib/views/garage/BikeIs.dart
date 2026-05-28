@@ -11,7 +11,13 @@ class BikeDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(bike.name)),
+      appBar: AppBar(
+        title: Text(
+          bike.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -64,6 +70,8 @@ class BikeDetailView extends StatelessWidget {
                   ),
                   Text(
                     bike.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.white,
                       fontSize: 24,
