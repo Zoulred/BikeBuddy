@@ -29,36 +29,33 @@ class GarageView extends StatelessWidget {
 
             final bike = viewModel.bikes.first;
 
-            return SingleChildScrollView(
+            return ListView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(context),
-                  const SizedBox(height: 24),
-                  _buildActiveBikeCard(context, bike),
-                  const SizedBox(height: 24),
-                  _buildSectionHeader(
-                    'Maintenance Overview',
-                    'View Calendar',
-                    onTap: () {},
-                  ),
-                  const SizedBox(height: 16),
-                  _buildOverviewRow(),
-                  const SizedBox(height: 24),
-                  _buildReminderCard(),
-                  const SizedBox(height: 24),
-                  _buildSectionHeader(
-                    'Maintenance History',
-                    'See All',
-                    onTap: () {},
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTimeline(),
-                  const SizedBox(height: 24),
-                  _buildAddRecordButton(context),
-                ],
-              ),
+              children: [
+                _buildHeader(context),
+                const SizedBox(height: 24),
+                _buildActiveBikeCard(context, bike),
+                const SizedBox(height: 24),
+                _buildSectionHeader(
+                  'Maintenance Overview',
+                  'View Calendar',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 16),
+                _buildOverviewRow(),
+                const SizedBox(height: 24),
+                _buildReminderCard(),
+                const SizedBox(height: 24),
+                _buildSectionHeader(
+                  'Maintenance History',
+                  'See All',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 16),
+                _buildTimeline(),
+                const SizedBox(height: 24),
+                _buildAddRecordButton(context),
+              ],
             );
           },
         ),
@@ -167,12 +164,21 @@ class GarageView extends StatelessWidget {
                   color: AppColors.electricBlue.withOpacity(0.4),
                   width: 2,
                 ),
-                color: AppColors.electricBlue.withOpacity(0.1),
+                color: AppColors.electricBlue.withOpacity(0.05),
               ),
-              child: const Icon(
-                FontAwesomeIcons.bicycle,
-                color: AppColors.electricBlue,
-                size: 34,
+              child: ClipOval(
+                child: bike.imagePath != null
+                    ? Image.asset(
+                        bike.imagePath!,
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                      )
+                    : const Icon(
+                        FontAwesomeIcons.bicycle,
+                        color: AppColors.electricBlue,
+                        size: 34,
+                      ),
               ),
             ),
             const SizedBox(width: 18),
@@ -189,12 +195,17 @@ class GarageView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    bike.name,
-                    style: const TextStyle(
-                      color: AppColors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Text(
+                      bike.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),

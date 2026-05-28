@@ -3,8 +3,11 @@ import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
+import '../../viewmodels/bike_viewmodel.dart';
+import '../../models/bike.dart';
 import '../../viewmodels/ride_viewmodel.dart';
 import '../profile/profile_view.dart';
+import '../tracker/ride_summary_view.dart';
 
 class DashboardView extends StatelessWidget {
   const DashboardView({super.key});
@@ -300,13 +303,85 @@ class DashboardView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Center(
-          child: Text(
-            'No recent rides yet.',
-            style: TextStyle(color: AppColors.textBody),
-          ),
+        Consumer2<RideViewModel, BikeViewModel>(
+          builder: (context, ridesVm, bikesVm, child) {
+            final rides = ridesVm.rides.reversed.toList();
+            if (rides.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No recent rides yet.',
+                  style: TextStyle(color: AppColors.textBody),
+                ),
+              );
+            }
+
+            final recent = rides.take(3).toList();
+            return Column(
+              children: recent.map((r) {
+                final bike = bikesVm.bikes.firstWhere(
+                  (b) => b.id == r.bikeId,
+                  orElse: () => Bike(
+                    id: null,
+                    name: 'Unknown Bike',
+                    type: BikeType.other,
+                    purchaseDate: DateTime.now(),
+                  ),
+                );
+                return GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => RideSummaryView(ride: r)),
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.navyBlue.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                r.title,
+                                style: const TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${r.distance.toStringAsFixed(2)} km · ${_formatDuration(r.duration)} · ${bike.name}',
+                                style: TextStyle(color: AppColors.textBody),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: AppColors.textBody,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
         ),
       ],
     );
+  }
+
+  String _formatDuration(Duration d) {
+    final h = d.inHours.toString().padLeft(2, '0');
+    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$h:$m:$s';
   }
 }

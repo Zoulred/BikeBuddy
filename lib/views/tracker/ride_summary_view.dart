@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../viewmodels/bike_viewmodel.dart';
+import '../../models/bike.dart';
 import '../../models/ride.dart';
+import '../../widgets/offline_map_preview.dart';
 
 class RideSummaryView extends StatefulWidget {
   final Ride ride;
@@ -26,6 +31,29 @@ class _RideSummaryViewState extends State<RideSummaryView> {
     super.initState();
     _notesController = TextEditingController();
     _loadNotes();
+  }
+
+  String _bikeName(BuildContext context) {
+    try {
+      final bikes = Provider.of<BikeViewModel>(context, listen: false).bikes;
+      final bike = bikes.firstWhere(
+        (b) => b.id == ride.bikeId,
+        orElse: () => Bike(
+          id: null,
+          name: 'Unknown Bike',
+          type: BikeType.other,
+          purchaseDate: DateTime.now(),
+        ),
+      );
+      final bikesAll = Provider.of<BikeViewModel>(context, listen: false).bikes;
+      final isActive =
+          bikesAll.isNotEmpty &&
+          bike.id != null &&
+          bike.id == bikesAll.first.id;
+      return isActive ? '${bike.name} (Active)' : bike.name;
+    } catch (_) {
+      return 'Unknown Bike';
+    }
   }
 
   Future<void> _loadNotes() async {
@@ -225,7 +253,6 @@ class _RideSummaryViewState extends State<RideSummaryView> {
   // =========================================================
   // MAP
   // =========================================================
-
   Widget _buildMapPreview() {
     if (ride.route.isEmpty) {
       return GlassBox(
@@ -246,78 +273,89 @@ class _RideSummaryViewState extends State<RideSummaryView> {
         child: SizedBox(
           height: 360,
           width: double.infinity,
-          child: Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: ride.route.first,
-                  zoom: 13,
-                ),
-                zoomControlsEnabled: false,
-                myLocationButtonEnabled: false,
-                mapToolbarEnabled: false,
-                compassEnabled: false,
-                tiltGesturesEnabled: false,
-                rotateGesturesEnabled: false,
-                markers: {
-                  Marker(
-                    markerId: const MarkerId('start'),
-                    position: ride.route.first,
+          child: FutureBuilder<ConnectivityResult>(
+            future: Connectivity().checkConnectivity(),
+            builder: (context, snap) {
+              final offline =
+                  snap.hasData && snap.data == ConnectivityResult.none;
+              if (offline) {
+                return OfflineMapPreview(
+                  center: ride.route.first,
+                  accuracyMeters: null,
+                  route: ride.route,
+                );
+              }
+              return Stack(
+                children: [
+                  GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: ride.route.first,
+                      zoom: 13,
+                    ),
+                    zoomControlsEnabled: false,
+                    myLocationButtonEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: false,
+                    tiltGesturesEnabled: false,
+                    rotateGesturesEnabled: false,
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('start'),
+                        position: ride.route.first,
+                      ),
+                      Marker(
+                        markerId: const MarkerId('end'),
+                        position: ride.route.last,
+                      ),
+                    },
+                    polylines: {
+                      Polyline(
+                        polylineId: const PolylineId('ride_route'),
+                        points: ride.route,
+                        color: AppColors.greenAccent,
+                        width: 5,
+                      ),
+                    },
                   ),
-
-                  Marker(
-                    markerId: const MarkerId('end'),
-                    position: ride.route.last,
-                  ),
-                },
-                polylines: {
-                  Polyline(
-                    polylineId: const PolylineId('ride_route'),
-                    points: ride.route,
-                    color: AppColors.greenAccent,
-                    width: 5,
-                  ),
-                },
-              ),
-
-              Positioned(
-                bottom: 14,
-                right: 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  ),
-                  child: Row(
-                    children: const [
-                      Text(
-                        '26°C',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
+                  Positioned(
+                    bottom: 14,
+                    right: 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
                         ),
                       ),
-
-                      SizedBox(width: 10),
-
-                      Icon(Icons.wb_sunny, color: Colors.amber, size: 24),
-                    ],
+                      child: const Row(
+                        children: [
+                          Text(
+                            '26°C',
+                            style: TextStyle(
+                              color: AppColors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Icon(Icons.wb_sunny, color: Colors.amber, size: 24),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
-
   // =========================================================
   // STATS CARD
   // =========================================================
@@ -503,7 +541,7 @@ class _RideSummaryViewState extends State<RideSummaryView> {
             _buildDetailRow(
               Icons.pedal_bike_rounded,
               'Bike',
-              'Giant Defy Advanced 2',
+              _bikeName(context),
             ),
 
             _divider(),

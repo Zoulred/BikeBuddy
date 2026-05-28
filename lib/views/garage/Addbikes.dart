@@ -14,8 +14,18 @@ class AddBikeView extends StatefulWidget {
 class _AddBikeViewState extends State<AddBikeView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  BikeType _selectedType = BikeType.mountain;
   DateTime _selectedDate = DateTime.now();
+  String? _selectedImagePath;
+  final List<String> _assetImages = [
+    'lib/assets/images/Bianchi.png',
+    'lib/assets/images/Pinarello.png',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedImagePath = _assetImages.isNotEmpty ? _assetImages.first : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,29 +56,46 @@ class _AddBikeViewState extends State<AddBikeView> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Bike Type',
+                'Bike Image',
                 style: TextStyle(
                   color: AppColors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<BikeType>(
-                value: _selectedType,
-                dropdownColor: AppColors.navyBlue,
-                decoration: _inputDecoration('Select type'),
-                items: BikeType.values
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(
-                          type.name.toUpperCase(),
-                          style: const TextStyle(color: AppColors.white),
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _assetImages.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final path = _assetImages[index];
+                    final selected = path == _selectedImagePath;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedImagePath = path),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: selected
+                                ? AppColors.electricBlue
+                                : Colors.white.withOpacity(0.06),
+                            width: selected ? 3 : 1,
+                          ),
+                        ),
+                        child: Image.asset(
+                          path,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.contain,
                         ),
                       ),
-                    )
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedType = val!),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -148,7 +175,8 @@ class _AddBikeViewState extends State<AddBikeView> {
     if (_formKey.currentState!.validate()) {
       final bike = Bike(
         name: _nameController.text,
-        type: _selectedType,
+        type: _inferTypeFromImage(_selectedImagePath),
+        imagePath: _selectedImagePath,
         purchaseDate: _selectedDate,
         totalKilometers: 0.0,
         maintenanceStatus: 'Good',
@@ -156,5 +184,13 @@ class _AddBikeViewState extends State<AddBikeView> {
       context.read<BikeViewModel>().addBike(bike);
       Navigator.pop(context);
     }
+  }
+
+  BikeType _inferTypeFromImage(String? path) {
+    if (path == null) return BikeType.other;
+    final lower = path.toLowerCase();
+    if (lower.contains('bianchi') || lower.contains('pinarello'))
+      return BikeType.road;
+    return BikeType.other;
   }
 }

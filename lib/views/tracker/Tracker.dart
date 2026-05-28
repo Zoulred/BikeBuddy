@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
@@ -9,6 +11,7 @@ import '../../services/LocationInfo.dart';
 import '../../models/ride.dart';
 import '../../viewmodels/ride_viewmodel.dart';
 import 'ride_summary_view.dart';
+import '../../widgets/offline_map_preview.dart';
 
 class TrackerView extends StatefulWidget {
   const TrackerView({super.key});
@@ -20,6 +23,8 @@ class TrackerView extends StatefulWidget {
 class _TrackerViewState extends State<TrackerView> {
   final LocationService _locationService = LocationService();
   GoogleMapController? _mapController;
+  StreamSubscription<ConnectivityResult>? _connectivitySub;
+  bool _isOffline = false;
   LatLng? _pendingCenter;
   final List<LatLng> _routePoints = [];
   final Set<Marker> _markers = {};
@@ -27,24 +32,133 @@ class _TrackerViewState extends State<TrackerView> {
   bool _isPaused = false;
   double _distance = 0.0;
   double _currentSpeedKmh = 0.0;
+  Position? _lastPosition;
+  final double _minMoveDistanceMeters = 5.0;
   DateTime? _runningSince;
   Duration _accumulatedDuration = Duration.zero;
   Timer? _timer;
   StreamSubscription<Position>? _locationSubscription;
   Duration _duration = Duration.zero;
+  double? _lastAccuracyMeters;
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _timer?.cancel();
     _locationSubscription?.cancel();
     _locationSubscription = null;
     _locationService.stopTracking();
+    _mapController = null;
     super.dispose();
+  }
+
+  Future<void> _safeAnimate(CameraUpdate update) async {
+    if (_mapController == null) return;
+    try {
+      await _mapController!.animateCamera(update);
+    } catch (_) {
+      // controller may be disposed; ignore
+    }
+  }
+
+  void _subscribeToLocation() {
+    _locationSubscription?.cancel();
+    _locationSubscription = _locationService.locationStream.listen(
+      _onPosition,
+      onError: (_) {},
+    );
+  }
+
+  void _onPosition(Position position) {
+    if (!_isTracking || _isPaused) return;
+    if (!mounted) return;
+
+    final newPoint = LatLng(position.latitude, position.longitude);
+    _lastAccuracyMeters = position.accuracy;
+
+    double segmentMeters = 0.0;
+    if (_routePoints.isNotEmpty) {
+      segmentMeters = _locationService.calculateDistance(
+        _routePoints.last,
+        newPoint,
+      );
+    }
+
+    final accuracy = (position.accuracy.isFinite && position.accuracy > 0)
+        ? position.accuracy
+        : _minMoveDistanceMeters;
+    final threshold = max(_minMoveDistanceMeters, accuracy);
+
+    double timeDeltaSeconds = 1.0;
+    if (_lastPosition?.timestamp != null) {
+      try {
+        timeDeltaSeconds =
+            position.timestamp
+                .difference(_lastPosition!.timestamp)
+                .inMilliseconds /
+            1000.0;
+        if (timeDeltaSeconds <= 0) timeDeltaSeconds = 1.0;
+      } catch (_) {
+        timeDeltaSeconds = 1.0;
+      }
+    }
+
+    double computedSpeedKmh = 0.0;
+    if (segmentMeters > 0 && timeDeltaSeconds > 0) {
+      computedSpeedKmh = (segmentMeters / timeDeltaSeconds) * 3.6;
+    }
+
+    final hasDeviceSpeed = position.speed.isFinite && position.speed >= 0;
+    if (hasDeviceSpeed) {
+      _currentSpeedKmh = position.speed * 3.6;
+    } else {
+      _currentSpeedKmh = computedSpeedKmh;
+    }
+
+    setState(() {
+      if (_routePoints.isEmpty) {
+        // always add the first fix
+        _routePoints.add(newPoint);
+      } else if (segmentMeters >= threshold) {
+        _distance += segmentMeters / 1000.0;
+        _routePoints.add(newPoint);
+      }
+
+      _markers.removeWhere(
+        (marker) => marker.markerId.value == 'current_location',
+      );
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('current_location'),
+          position: newPoint,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+        ),
+      );
+    });
+
+    _lastPosition = position;
+    if (segmentMeters >= 1) {
+      _safeAnimate(CameraUpdate.newLatLng(newPoint));
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    Connectivity().checkConnectivity().then((res) {
+      _isOffline = res == ConnectivityResult.none;
+      setState(() {});
+    });
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((res) {
+      final offline = res == ConnectivityResult.none;
+      if (offline != _isOffline) {
+        setState(() {
+          _isOffline = offline;
+        });
+      }
+    });
     _setInitialLocation();
   }
 
@@ -69,10 +183,9 @@ class _TrackerViewState extends State<TrackerView> {
 
     if (pos == null) return;
     _pendingCenter = LatLng(pos.latitude, pos.longitude);
+    _lastAccuracyMeters = pos.accuracy;
     if (_mapController != null) {
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(_pendingCenter!, 16),
-      );
+      _safeAnimate(CameraUpdate.newLatLngZoom(_pendingCenter!, 16));
       _pendingCenter = null;
     } else {
       setState(() {});
@@ -117,7 +230,7 @@ class _TrackerViewState extends State<TrackerView> {
 
     if (startPoint != null) {
       _pendingCenter = startPoint;
-      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16));
+      _safeAnimate(CameraUpdate.newLatLngZoom(startPoint, 16));
     }
 
     _locationService.startTracking();
@@ -125,35 +238,8 @@ class _TrackerViewState extends State<TrackerView> {
       _locationService.stopTracking();
       return;
     }
-    _locationSubscription = _locationService.locationStream.listen((position) {
-      if (!_isTracking) return;
-      if (!mounted) return;
-      final newPoint = LatLng(position.latitude, position.longitude);
-      if (position.speed.isFinite) {
-        _currentSpeedKmh = position.speed * 3.6;
-      }
-      setState(() {
-        if (_routePoints.isNotEmpty) {
-          _distance +=
-              _locationService.calculateDistance(_routePoints.last, newPoint) /
-              1000;
-        }
-        _routePoints.add(newPoint);
-        _markers.removeWhere(
-          (marker) => marker.markerId.value == 'current_location',
-        );
-        _markers.add(
-          Marker(
-            markerId: const MarkerId('current_location'),
-            position: newPoint,
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueAzure,
-            ),
-          ),
-        );
-      });
-      _mapController?.animateCamera(CameraUpdate.newLatLng(newPoint));
-    });
+    _lastPosition = currentPos;
+    _subscribeToLocation();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -213,45 +299,14 @@ class _TrackerViewState extends State<TrackerView> {
       _locationSubscription?.cancel();
       _locationSubscription = null;
       _locationService.stopTracking();
+      _lastPosition = null;
       setState(() {});
     } else {
       _isPaused = false;
       _runningSince = DateTime.now();
       _locationService.startTracking();
-      _locationSubscription = _locationService.locationStream.listen((
-        position,
-      ) {
-        if (!_isTracking || _isPaused) return;
-        if (!mounted) return;
-        final newPoint = LatLng(position.latitude, position.longitude);
-        if (position.speed.isFinite) {
-          _currentSpeedKmh = position.speed * 3.6;
-        }
-        setState(() {
-          if (_routePoints.isNotEmpty) {
-            _distance +=
-                _locationService.calculateDistance(
-                  _routePoints.last,
-                  newPoint,
-                ) /
-                1000;
-          }
-          _routePoints.add(newPoint);
-          _markers.removeWhere(
-            (marker) => marker.markerId.value == 'current_location',
-          );
-          _markers.add(
-            Marker(
-              markerId: const MarkerId('current_location'),
-              position: newPoint,
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueAzure,
-              ),
-            ),
-          );
-        });
-        _mapController?.animateCamera(CameraUpdate.newLatLng(newPoint));
-      });
+      _lastPosition = null;
+      _subscribeToLocation();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
           timer.cancel();
@@ -272,7 +327,7 @@ class _TrackerViewState extends State<TrackerView> {
     final position = await _locationService.getCurrentPosition();
     if (position == null) return;
     final target = LatLng(position.latitude, position.longitude);
-    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(target, 16));
+    _safeAnimate(CameraUpdate.newLatLngZoom(target, 16));
   }
 
   void _showPermissionDialog() {
@@ -322,34 +377,63 @@ class _TrackerViewState extends State<TrackerView> {
     return Scaffold(
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(14.5995, 120.9842),
-              zoom: 14,
-            ),
-            onMapCreated: (controller) {
-              _mapController = controller;
-              if (_pendingCenter != null) {
-                _mapController?.animateCamera(
-                  CameraUpdate.newLatLngZoom(_pendingCenter!, 16),
-                );
-                _pendingCenter = null;
-              }
-            },
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-            markers: _markers,
-            polylines: {
-              Polyline(
-                polylineId: const PolylineId('ride_route'),
-                points: _routePoints,
-                color: AppColors.greenAccent,
-                width: 6,
+          _isOffline
+              ? OfflineMapPreview(
+                  center:
+                      _pendingCenter ??
+                      (_routePoints.isNotEmpty ? _routePoints.last : null),
+                  accuracyMeters: _lastAccuracyMeters,
+                  route: _routePoints,
+                )
+              : GoogleMap(
+                  initialCameraPosition: const CameraPosition(
+                    target: LatLng(14.5995, 120.9842),
+                    zoom: 14,
+                  ),
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    if (_pendingCenter != null) {
+                      _safeAnimate(
+                        CameraUpdate.newLatLngZoom(_pendingCenter!, 16),
+                      );
+                      _pendingCenter = null;
+                    }
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                  markers: _markers,
+                  polylines: {
+                    Polyline(
+                      polylineId: const PolylineId('ride_route'),
+                      points: _routePoints,
+                      color: AppColors.greenAccent,
+                      width: 6,
+                    ),
+                  },
+                ),
+          if (_isOffline)
+            Positioned(
+              top: 110,
+              left: 24,
+              right: 24,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Offline — map tiles unavailable. Showing last known location.',
+                  style: TextStyle(color: Colors.black87),
+                  textAlign: TextAlign.center,
+                ),
               ),
-            },
-          ),
+            ),
           Positioned(
             top: 40,
             left: 24,
