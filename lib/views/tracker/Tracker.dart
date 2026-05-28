@@ -431,40 +431,61 @@ class _TrackerViewState extends State<TrackerView> {
                     borderRadius: BorderRadius.circular(100),
                     opacity: 0.12,
                     blur: 20,
-                    child: Container(
-                      width: 160,
-                      height: 160,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(shape: BoxShape.circle),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'SPEED',
-                            style: TextStyle(
-                              color: AppColors.textBody,
-                              fontSize: 12,
-                            ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final diameter = (constraints.maxWidth * 0.6).clamp(
+                          110.0,
+                          160.0,
+                        );
+                        final avgSpeed =
+                            (_distance / (_duration.inSeconds / 3600 + 0.0001))
+                                .toStringAsFixed(1);
+                        return Container(
+                          width: diameter,
+                          height: diameter,
+                          padding: const EdgeInsets.all(14),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$_currentSpeed',
-                            style: const TextStyle(
-                              color: AppColors.white,
-                              fontSize: 44,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'SPEED',
+                                style: TextStyle(
+                                  color: AppColors.textBody,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '$_currentSpeed',
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 44,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'AVG $avgSpeed km/h',
+                                  style: const TextStyle(
+                                    color: AppColors.textBody,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'AVG ${(_distance / (_duration.inSeconds / 3600 + 0.0001)).toStringAsFixed(1)} km/h',
-                            style: const TextStyle(
-                              color: AppColors.textBody,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ),

@@ -1,3 +1,5 @@
+import com.android.build.gradle.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -14,6 +16,16 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+}
+// Ensure library modules have a namespace (workaround for some pub packages without namespace)
+subprojects {
+    plugins.withId("com.android.library") {
+        extensions.findByType(LibraryExtension::class.java)?.let { libExt ->
+            if (libExt.namespace.isNullOrBlank()) {
+                libExt.namespace = "com.example.bikebuddy.${project.name}"
+            }
+        }
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")

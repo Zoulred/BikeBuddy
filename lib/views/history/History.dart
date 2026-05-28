@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_theme.dart';
@@ -335,59 +336,90 @@ class _HistoryViewState extends State<HistoryView> {
             builder: (context, constraints) {
               final narrow = constraints.maxWidth < 420;
               if (narrow) {
-                // Stack vertically on narrow screens
-                return Column(
+                // Compact stacked card for narrow screens
+                return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildRideMapPreview(ride),
-                    const SizedBox(height: 12),
-                    Text(
-                      ride.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  ride.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.navyBlue.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.wb_sunny,
+                                  color: Colors.orange,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textBody,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.navyBlue.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildStatBlock(
+                                  Icons.place,
+                                  _formatDistanceNumber(ride.distance),
+                                  'km',
+                                ),
+                                _verticalDivider(),
+                                _buildStatBlock(
+                                  Icons.access_time,
+                                  _formatDuration(ride.duration),
+                                  '',
+                                ),
+                                _verticalDivider(),
+                                _buildStatBlock(
+                                  Icons.speed,
+                                  _getAverageSpeed(ride),
+                                  'km/h',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.textBody, fontSize: 12),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: _buildStatCompact(
-                            Icons.place,
-                            _formatDistanceNumber(ride.distance),
-                            'km',
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: _buildStatCompact(
-                            Icons.access_time,
-                            _formatDuration(ride.duration),
-                            '',
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: _buildStatCompact(
-                            Icons.speed,
-                            _getAverageSpeed(ride),
-                            'km/h',
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 );
@@ -402,15 +434,54 @@ class _HistoryViewState extends State<HistoryView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          ride.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                ride.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.navyBlue.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.wb_sunny,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () {
+                                final summary =
+                                    '${ride.title}\n${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatTime(ride.dateTime)}\nDistance: ${ride.distance.toStringAsFixed(2)} km\nDuration: ${_formatDuration(ride.duration)}\nAvg: ${ride.averageSpeed.toStringAsFixed(1)} km/h\nCalories: ${ride.calories} kcal\n#BikeBuddy';
+                                Share.share(
+                                  summary,
+                                  subject: 'My Ride Summary',
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.share,
+                                color: AppColors.electricBlue,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: AppColors.textBody,
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -423,61 +494,45 @@ class _HistoryViewState extends State<HistoryView> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child: _buildStatColumnSimple(
-                                Icons.place,
-                                _formatDistanceNumber(ride.distance),
-                                'km',
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.navyBlue.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildStatBlock(
+                                  Icons.place,
+                                  _formatDistanceNumber(ride.distance),
+                                  'km',
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child: _buildStatColumnSimple(
-                                Icons.access_time,
-                                _formatDuration(ride.duration),
-                                '',
+                              _verticalDivider(),
+                              Expanded(
+                                child: _buildStatBlock(
+                                  Icons.access_time,
+                                  _formatDuration(ride.duration),
+                                  '',
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child: _buildStatColumnSimple(
-                                Icons.speed,
-                                _getAverageSpeed(ride),
-                                'km/h',
+                              _verticalDivider(),
+                              Expanded(
+                                child: _buildStatBlock(
+                                  Icons.speed,
+                                  _getAverageSpeed(ride),
+                                  'km/h',
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // placeholder weather icon
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppColors.navyBlue.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.wb_sunny,
-                          color: Colors.orange,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.textBody,
-                      ),
-                    ],
                   ),
                 ],
               );
@@ -488,63 +543,43 @@ class _HistoryViewState extends State<HistoryView> {
     );
   }
 
-  Widget _buildStatColumnSimple(IconData icon, String value, String unit) {
+  Widget _buildStatBlock(IconData icon, String value, String unit) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: AppColors.electricBlue),
-            const SizedBox(width: 8),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          ],
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppColors.navyBlue.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.electricBlue),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
         Text(unit, style: TextStyle(color: AppColors.textBody, fontSize: 12)),
       ],
     );
   }
 
-  Widget _buildStatCompact(IconData icon, String value, String unit) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: AppColors.electricBlue),
-        const SizedBox(width: 6),
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-        if (unit.isNotEmpty) const SizedBox(width: 6),
-        if (unit.isNotEmpty)
-          Text(unit, style: TextStyle(color: AppColors.textBody, fontSize: 12)),
-      ],
+  Widget _verticalDivider() {
+    return Container(
+      width: 1,
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      color: Colors.white.withOpacity(0.06),
     );
   }
 

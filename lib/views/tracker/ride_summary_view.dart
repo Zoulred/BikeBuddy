@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/app_colors.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/app_theme.dart';
 import '../../models/ride.dart';
 
@@ -21,7 +22,62 @@ class RideSummaryView extends StatelessWidget {
             _buildMapPreview(),
             const SizedBox(height: 24),
             _buildDetailsGrid(),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.share),
+                label: const Text('Share Ride'),
+                onPressed: () {
+                  final summary =
+                      '${ride.title}\n${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatDuration(ride.duration)}\nDistance: ${ride.distance.toStringAsFixed(2)} km\nAvg speed: ${ride.averageSpeed.toStringAsFixed(1)} km/h\nCalories: ${ride.calories} kcal\n#BikeBuddy';
+                  Share.share(summary, subject: 'My Ride Summary');
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Quick social buttons: open platform share sheet (user can choose Instagram, Facebook, Messenger)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE1306C),
+                  ),
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Instagram'),
+                  onPressed: () {
+                    final summary =
+                        '${ride.title}\n${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatDuration(ride.duration)}\nDistance: ${ride.distance.toStringAsFixed(2)} km\nAvg speed: ${ride.averageSpeed.toStringAsFixed(1)} km/h\nCalories: ${ride.calories} kcal\n#BikeBuddy';
+                    Share.share(summary, subject: 'My Ride Summary');
+                  },
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1877F2),
+                  ),
+                  icon: const Icon(Icons.facebook),
+                  label: const Text('Facebook'),
+                  onPressed: () {
+                    final summary =
+                        '${ride.title}\n${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatDuration(ride.duration)}\nDistance: ${ride.distance.toStringAsFixed(2)} km\nAvg speed: ${ride.averageSpeed.toStringAsFixed(1)} km/h\nCalories: ${ride.calories} kcal\n#BikeBuddy';
+                    Share.share(summary, subject: 'My Ride Summary');
+                  },
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00B2FF),
+                  ),
+                  icon: const Icon(Icons.message),
+                  label: const Text('Messenger'),
+                  onPressed: () {
+                    final summary =
+                        '${ride.title}\n${ride.dateTime.day}/${ride.dateTime.month}/${ride.dateTime.year} · ${_formatDuration(ride.duration)}\nDistance: ${ride.distance.toStringAsFixed(2)} km\nAvg speed: ${ride.averageSpeed.toStringAsFixed(1)} km/h\nCalories: ${ride.calories} kcal\n#BikeBuddy';
+                    Share.share(summary, subject: 'My Ride Summary');
+                  },
+                ),
+              ],
+            ),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
